@@ -45,27 +45,6 @@ Circuit is the default schematic. Section is the cutaway. Both follow the Home A
 
 ![Section schematic, cooling, light and dark](docs/images/card-section-cooling.webp)
 
-## Install
-
-This is a **HACS custom integration**, not a Home Assistant Core add-on. It is not in the HACS default store.
-
-### HACS (recommended)
-
-1. **HACS → ⋮ → Custom repositories**.
-2. Repository: [https://github.com/spongioblast/spo_pool_heat_pump](https://github.com/spongioblast/spo_pool_heat_pump)
-3. Type: **Integration** → Add.
-4. HACS → search **SPO Pool Heat Pump** → **Download**.
-5. If GitHub has a **Release** (for example `1.1.0`), HACS installs that. If there is no release, it follows `main`.
-6. **Restart** Home Assistant.
-
-The Lovelace card is included. Do not add a Lovelace resource for it.
-
-### Manual install
-
-Copy **only** `custom_components/spo_pool_heat_pump` into `<config>/custom_components/` and restart. Do not copy `tools/`, `tests/`, `ha-docker/`, or `card-src/` — HACS does not install those either.
-
-Then wire the DR164 and add the integration.
-
 ## Wire the DR164
 
 The factory WiFi / DTU port already has the four pins the DR164 needs — **+**, **A**, **B**, **G**. The DR164 runs in parallel on that port and takes 12 V from the pump. No extra power supply. Four wires, one per pin. Do not cut the panel cable.
@@ -102,13 +81,25 @@ On the DR164 web UI (save and restart after these pages):
 
    Or from this repository (Python 3, nothing to install): `python tools/dr164_event_off.py 192.168.x.x` — on Windows, `tools\dr164_event_off.cmd 192.168.x.x`. No IP lists modules that answer a broadcast. `--check` queries only.
 
-## Add it in Home Assistant
+Port `8899` is ready. Use the reserved LAN IP in the next step.
 
-**Settings → Devices & services → Add integration → SPO Pool Heat Pump**. Host = the reserved DR164 IP, port `8899`. Setup listens a few seconds and pre-selects a profile — keep it unless [Supported heat pumps](#supported-heat-pumps) says the name on the case is a different family.
+## Add it to Home Assistant
 
-Leave **Write path** on **Second panel (slave 2)**. It works with or without the factory WiFi module. **WiFi module (slave 99)** only changes mode on this bus. **Panel address 1** is unproven. If the bus does not match a shipped map, pick **Unknown heat pump — dump only**. Fairland CN13 / IPS Pro: confirm **Modbus slave (H37)** (CN13 default 50, IPS Pro usually 1). Leave **Allow changing service settings** off.
+This is a **HACS** custom integration (Home Assistant Community Store). It is not a Core add-on and not in the HACS default store. Host in setup is the reserved DR164 IP from above.
 
-If the reserved IP or port changes later, use **Reconfigure** (host and port only). Profile, write path, and H37 stay under **Configure**. Do not add Home Assistant’s core **Modbus** integration or set the DR164 to Modbus gateway.
+1. Install [HACS](https://hacs.xyz) if you do not have it yet.
+2. **HACS → ⋮ → Custom repositories**.
+3. Repository: [https://github.com/spongioblast/spo_pool_heat_pump](https://github.com/spongioblast/spo_pool_heat_pump). Type: **Integration** → Add.
+4. HACS → search **SPO Pool Heat Pump** → **Download**. A GitHub Release is used if one exists; otherwise HACS follows `main`.
+5. **Restart** Home Assistant.
+6. **Settings → Devices & services → Add integration → SPO Pool Heat Pump**. Host = the reserved DR164 IP, port `8899`. Setup listens a few seconds and picks a profile — keep it unless [Supported heat pumps](#supported-heat-pumps) says otherwise. Leave **Write path** on **Second panel (slave 2)** and **Allow changing service settings** off.
+7. Add the card to a dashboard: **Edit dashboard → Add card**, search **SPO Pool Heat Pump**. Reload the browser tab after the restart so the card module loads. Do not add a Lovelace / Dashboard resource.
+
+If the reserved IP or port changes later, use **Reconfigure** (host and port only). Profile and write path stay under **Configure**. Do not add Home Assistant’s core **Modbus** integration.
+
+### Manual install
+
+Copy **only** `custom_components/spo_pool_heat_pump` into `<config>/custom_components/` and restart, then from step 6 above. Do not copy `tools/`, `tests/`, `ha-docker/`, or `card-src/` — HACS does not install those either.
 
 ## Options
 
@@ -126,6 +117,12 @@ If the reserved IP or port changes later, use **Reconfigure** (host and port onl
 
 ## Dashboard card
 
+The sliders icon (next to Quiet and Power) opens Settings. Everyday writes (power, mode, setpoint, timers, COP flow) edit inline. H/F/D rows stay locked until **Allow changing service settings** is on. Pin the same catalog with `custom:spo-pool-heat-pump-settings-card` if you want it always visible.
+
+The card shows the new value immediately and pulses until the pump confirms it. If nothing comes back, it reverts (about 12 s; mode and timers wait about 20 s). A few seconds of unavailable after a change is the board committing — wait. Do not re-add the integration.
+
+COP is drawn under the unit only when it is non-zero (board value, or calculated from manual flow, ΔT, and electrical power). ΔT stays on the left.
+
 ```yaml
 type: custom:spo-pool-heat-pump-card
 entity: climate.pool_heat_pump
@@ -134,14 +131,6 @@ animation: true       # pipes, plume, surface, and fan; false freezes all motion
 settings: true        # sliders icon opens Settings; false hides it
 # parameters_groups: [H, F]   # optional: only these service-menu/status groups
 ```
-
-The sliders icon (next to Quiet and Power) opens Settings. Everyday writes (power, mode, setpoint, timers, COP flow) edit inline. H/F/D rows stay locked until **Allow changing service settings** is on. Pin the same catalog with `custom:spo-pool-heat-pump-settings-card` if you want it always visible.
-
-The card shows the new value immediately and pulses until the pump confirms it. If nothing comes back, it reverts (about 12 s; mode and timers wait about 20 s). A few seconds of unavailable after a change is the board committing — wait. Do not re-add the integration.
-
-COP is drawn under the unit only when it is non-zero (board value, or calculated from manual flow, ΔT, and electrical power). ΔT stays on the left.
-
-The card is registered automatically. After install, **restart Home Assistant, then reload the browser tab**. Do not add a Lovelace resource — a second load duplicates the card and can show Configuration error.
 
 If **Add to dashboard** only offers Manual YAML, reload the tab, confirm `/spo_pool_heat_pump/spo-pool-heat-pump-card.js` is HTTP 200, and do not add a Dashboard resource. Until the module runs, YAML still works:
 
