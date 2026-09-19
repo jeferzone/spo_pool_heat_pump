@@ -65,6 +65,8 @@ Firmware **V1.0.15** / web **1.0.08**, measured 2026-09-14.
 
 `AT+EVENT=off` and pack 20 must persist across a module reboot. One TCP client only on port 8899.
 
+**Silent-bus `AT+Z`.** Live 2026-09-17: on slave 2 the bus died for hours while the DR164 still answered UDP AT and `AT+TCPLK=on`. Last HA dump frames were a normal slave-2 65-byte reply. `AT+Z` alone (no Modbus) released the pair; the same weekend on slave 99 (Home Assistant not answering polls) had only 15 s radio flickers. The module has no DE-release command. After **60 s** with no frame of any kind and TCP still up, the coordinator sends the same `www.usr.cn` / `+ok` / `AT+Z` handshake (UDP 48899) and does **not** FC03. 15 s still only marks unavailable and redials TCP — that is a half-open socket, not this fault. Cooldown 120 s so a boot does not loop. Option `reboot_dr164_on_silence` (default on, PC1002 only). Ethernet or USB-on-HA is the durable fix.
+
 ## Dump vs USB reader
 
 The card **Bus dump** writes the same `.log` / `.bin` dialect as [`tools/rs485-dump`](../tools/rs485-dump/README.md) (hex + ASCII, `# idle`, timestamps, optional `# dir=tx`). Feed a `.log` into `python tools/rs485-dump/analyze.py` or the lab `dump_replay_server.py`.

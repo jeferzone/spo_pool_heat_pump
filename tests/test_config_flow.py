@@ -20,6 +20,7 @@ from spo_pool_heat_pump.const import (  # noqa: E402
     CONF_POLL_SLAVE,
     CONF_PORT,
     CONF_PROFILE,
+    CONF_REBOOT_DR164_ON_SILENCE,
     CONF_SERVICE_MENU_WRITES,
     CONF_WRITE_PATH,
 )
@@ -99,6 +100,7 @@ def test_cosma_form_defaults_to_second_panel_with_or_without_slave99() -> None:
         assert form["type"] == "form"
         defaults = {key.schema: key.default() for key in form["data_schema"].schema if key.default is not vol.UNDEFINED}
         assert defaults[CONF_WRITE_PATH] == "slave2"
+        assert defaults[CONF_REBOOT_DR164_ON_SILENCE] is True
         note = form["description_placeholders"]["bus_note"]
         assert "does not prove" in note
         assert "does not need one" in note
@@ -125,6 +127,7 @@ def test_dump_only_create_omits_write_path() -> None:
         assert CONF_NAME in names
         assert CONF_WRITE_PATH not in names
         assert CONF_SERVICE_MENU_WRITES not in names
+        assert "reboot_dr164_on_silence" not in names
         result = await flow.async_step_options_setup({CONF_NAME: "Unknown"})
         assert result["type"] == "create_entry"
         assert result["data"] == {CONF_HOST: "10.0.0.8", CONF_PORT: 8899}

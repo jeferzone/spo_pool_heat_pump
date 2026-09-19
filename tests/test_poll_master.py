@@ -148,9 +148,14 @@ def test_merge_entry_options_drops_poll_slave_on_pc1002() -> None:
 def test_merge_entry_options_resets_slave_when_profile_changes() -> None:
     data = {"profile": "fairland_pc1004_cn13", "poll_slave": 60}
     options = {"profile": "fairland_pc1004_cn13", "poll_slave": 60}
-    merged = merge_entry_options(data, options, {"profile": "fairland_ips_pro_coils", "poll_slave": 60})
+    merged = merge_entry_options(
+        data,
+        {**options, "reboot_dr164_on_silence": True},
+        {"profile": "fairland_ips_pro_coils", "poll_slave": 60},
+    )
     assert merged["poll_slave"] == 1
     assert merged["poll_interval"] == 10
+    assert "reboot_dr164_on_silence" not in merged
 
 
 def test_migrate_entry_storage_moves_settings_to_options() -> None:

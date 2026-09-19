@@ -15,6 +15,14 @@ IDLE_FRAME_S = 0.020
 # Solicited slave-2 replies older than this cannot beat the board's ~340 ms
 # page-read deadline and will collide with its next frame if sent anyway.
 STALE_REPLY_S = 0.200
+# After this many seconds with no RS-485 frame of any kind, while TCP :8899
+# is still up, reboot the DR164 (AT+Z). 60 s is past the board's ~20 s
+# post-commit pause (broadcasts stretch, polls still arrive). 15 s only
+# marks unavailable and redials TCP — that is not this fault. Live 2026-09-17:
+# AT+Z released a bus that FC03 had also woken; slave 99 (HA silent) did not
+# jam. Cooldown covers the ~20 s module boot plus one extra stale window.
+DR164_SILENCE_REBOOT_S = 60.0
+DR164_REBOOT_COOLDOWN_S = 120.0
 SENSOR_PUBLISH_INTERVAL_S = 15.0
 DETECT_LISTEN_S = 5.0
 BROADCAST_START = 2001
@@ -30,6 +38,7 @@ CONF_NAME = "name"
 CONF_SERVICE_MENU_WRITES = "service_menu_writes"
 CONF_MANUAL_COP_FLOW = "manual_cop_flow"
 CONF_WATER_FLOW_M3H = "water_flow_m3h"
+CONF_REBOOT_DR164_ON_SILENCE = "reboot_dr164_on_silence"
 
 # Connection identity stays on ConfigEntry.data. Everything else is options.
 ENTRY_OPTION_KEYS = (
@@ -40,6 +49,7 @@ ENTRY_OPTION_KEYS = (
     CONF_SERVICE_MENU_WRITES,
     CONF_MANUAL_COP_FLOW,
     CONF_WATER_FLOW_M3H,
+    CONF_REBOOT_DR164_ON_SILENCE,
 )
 
 RELOAD_OPTION_KEYS = (
@@ -106,6 +116,12 @@ def service_menu_writes_enabled(data: dict, options: dict | None = None) -> bool
     return bool(opts.get(CONF_SERVICE_MENU_WRITES, data.get(CONF_SERVICE_MENU_WRITES, False)))
 
 
+def reboot_dr164_on_silence_enabled(data: dict, options: dict | None = None) -> bool:
+    """Default on. The DR164 has no DE-release AT; this is the recovery."""
+    opts = options or {}
+    return bool(opts.get(CONF_REBOOT_DR164_ON_SILENCE, data.get(CONF_REBOOT_DR164_ON_SILENCE, True)))
+
+
 def reload_option_fingerprint(data: dict, options: dict | None = None) -> tuple:
     opts = options or {}
     return (
@@ -162,6 +178,8 @@ def merge_entry_options(data: dict, options: dict, user_input: dict) -> dict:
         merged.pop(CONF_POLL_INTERVAL, None)
         if profile["driver"]["type"] == "listen_only":
             merged.pop(CONF_WRITE_PATH, None)
+        if profile["driver"]["type"] != "pc1002_bus":
+            merged.pop(CONF_REBOOT_DR164_ON_SILENCE, None)
         return merged
     if selected != previous:
         merged[CONF_POLL_SLAVE] = int(profile["driver"].get("poll_slave", 1))
@@ -169,6 +187,7 @@ def merge_entry_options(data: dict, options: dict, user_input: dict) -> dict:
     elif CONF_POLL_SLAVE not in user_input:
         merged[CONF_POLL_SLAVE] = int(profile["driver"].get("poll_slave", 1))
     merged.pop(CONF_WRITE_PATH, None)
+    merged.pop(CONF_REBOOT_DR164_ON_SILENCE, None)
     return merged
 
 PRESET_SILENT = "silent"

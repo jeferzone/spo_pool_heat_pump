@@ -17,6 +17,7 @@ from .const import (
     CONF_POLL_SLAVE,
     CONF_PORT,
     CONF_PROFILE,
+    CONF_REBOOT_DR164_ON_SILENCE,
     CONF_SERVICE_MENU_WRITES,
     CONF_WATER_FLOW_M3H,
     CONF_WRITE_PATH,
@@ -129,6 +130,8 @@ class PoolHeatPumpConfigFlow(ConfigFlow, domain=DOMAIN):
                 options[CONF_POLL_SLAVE] = user_input[CONF_POLL_SLAVE]
             if CONF_SERVICE_MENU_WRITES in user_input:
                 options[CONF_SERVICE_MENU_WRITES] = bool(user_input[CONF_SERVICE_MENU_WRITES])
+            if CONF_REBOOT_DR164_ON_SILENCE in user_input:
+                options[CONF_REBOOT_DR164_ON_SILENCE] = bool(user_input[CONF_REBOOT_DR164_ON_SILENCE])
             return self.async_create_entry(
                 title=user_input.get(CONF_NAME, DEFAULT_NAME),
                 data=data,
@@ -142,6 +145,7 @@ class PoolHeatPumpConfigFlow(ConfigFlow, domain=DOMAIN):
             if default_path not in paths:
                 default_path = next(iter(paths), WRITE_PATH_SLAVE2)
             schema[vol.Required(CONF_WRITE_PATH, default=default_path)] = vol.In(paths)
+            schema[vol.Required(CONF_REBOOT_DR164_ON_SILENCE, default=True)] = bool
         elif driver == "poll_master":
             schema[vol.Required(CONF_POLL_INTERVAL, default=int(profile["driver"].get("poll_interval", 10)))] = int
             schema[vol.Required(CONF_POLL_SLAVE, default=int(profile["driver"].get("poll_slave", 1)))] = vol.All(
@@ -226,6 +230,13 @@ class PoolHeatPumpOptionsFlow(OptionsFlow):
             if default_path not in paths:
                 default_path = next(iter(paths), WRITE_PATH_SLAVE2)
             schema[vol.Required(CONF_WRITE_PATH, default=default_path)] = vol.In(paths)
+            schema[vol.Required(
+                CONF_REBOOT_DR164_ON_SILENCE,
+                default=entry.options.get(
+                    CONF_REBOOT_DR164_ON_SILENCE,
+                    entry.data.get(CONF_REBOOT_DR164_ON_SILENCE, True),
+                ),
+            )] = bool
         elif driver == "poll_master":
             schema[
                 vol.Required(

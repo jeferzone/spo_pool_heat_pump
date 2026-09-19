@@ -40,9 +40,14 @@ def test_listen_only_handle_frame_does_not_reply() -> None:
 
 def test_merge_entry_options_drops_write_path_on_dump_only() -> None:
     data = {"profile": "mida_cosma_pc1002", "write_path": "dtu_99"}
-    merged = merge_entry_options(data, {"write_path": "dtu_99"}, {"profile": "unknown_dump_only"})
+    merged = merge_entry_options(
+        data,
+        {"write_path": "dtu_99", "reboot_dr164_on_silence": True},
+        {"profile": "unknown_dump_only"},
+    )
     assert merged["profile"] == "unknown_dump_only"
     assert "write_path" not in merged
+    assert "reboot_dr164_on_silence" not in merged
     assert "poll_slave" not in merged
 
 

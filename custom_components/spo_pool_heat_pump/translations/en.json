@@ -29,6 +29,7 @@
         "data": {
           "name": "Name",
           "write_path": "Write path",
+          "reboot_dr164_on_silence": "Reboot DR164 if the bus stays silent",
           "poll_interval": "Poll interval (seconds)",
           "poll_slave": "Modbus slave (H37)",
           "service_menu_writes": "⚠ Allow changing service settings"
@@ -36,6 +37,7 @@
         "data_description": {
           "name": "How this heat pump appears in Home Assistant.",
           "write_path": "Keep second panel (slave 2). It is the mechanism the wired display uses and works with or without a WiFi module. Slave 99 only addresses the factory module and is mode-only on this bus; panel address 1 is unproven.",
+          "reboot_dr164_on_silence": "If no RS-485 frame arrives for 60 s while TCP is still up, send AT+Z (UDP 48899). Recovers a DR164 that left its RS-485 driver enabled after a slave-2 reply. Does not write the heat pump. Leave on.",
           "poll_interval": "How often Fairland-style units are polled. Cosma and Mini broadcast and ignore this.",
           "service_menu_writes": "Leave this off unless you know the OEM numbers. Wrong H, F, or D values can damage or brick the heat pump.",
           "poll_slave": "Fairland CN13 menu H37. Default 50. IPS Pro is usually 1."
@@ -85,6 +87,7 @@
         "data": {
           "profile": "Profile",
           "write_path": "Write path",
+          "reboot_dr164_on_silence": "Reboot DR164 if the bus stays silent",
           "poll_interval": "Poll interval (seconds)",
           "poll_slave": "Modbus slave (H37)",
           "service_menu_writes": "⚠ Allow changing service settings",
@@ -95,6 +98,7 @@
           "service_menu_writes": "Leave this off unless you know the OEM numbers. Wrong H, F, or D values can damage or brick the heat pump.",
           "profile": "Same-board badges are listed on each option. Oasis / Warmpool → Hayward. Azuro / Mountfield → MIDA Cosma. SuperMini → PHNIX Mini. Slave 50 → CN13. IPS Pro / InverX → coil map. Not listed? Dump only.",
           "write_path": "Keep second panel (slave 2). It is the mechanism the wired display uses and works with or without a WiFi module. Slave 99 only addresses the factory module and is mode-only on this bus; panel address 1 is unproven.",
+          "reboot_dr164_on_silence": "If no RS-485 frame arrives for 60 s while TCP is still up, send AT+Z (UDP 48899). Recovers a DR164 that left its RS-485 driver enabled after a slave-2 reply. Does not write the heat pump. Leave on.",
           "poll_interval": "How often Fairland-style units are polled. Cosma and Mini broadcast and ignore this.",
           "poll_slave": "Fairland CN13 menu H37. Default 50. IPS Pro is usually 1.",
           "manual_cop_flow": "When on, COP is calculated from this flow, inlet/outlet ΔT, and electrical power. The controller COP register is ignored.",

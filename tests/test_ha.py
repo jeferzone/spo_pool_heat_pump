@@ -16,7 +16,7 @@ from homeassistant.components.climate import ClimateEntityFeature, HVACAction, H
 
 from spo_pool_heat_pump.climate import PoolHeatPumpClimate  # noqa: E402
 from spo_pool_heat_pump.config_flow import PoolHeatPumpConfigFlow  # noqa: E402
-from spo_pool_heat_pump.const import CONF_PORT, STALE_SECONDS  # noqa: E402
+from spo_pool_heat_pump.const import CONF_PORT, CONF_REBOOT_DR164_ON_SILENCE, STALE_SECONDS  # noqa: E402
 from spo_pool_heat_pump.coordinator import PoolHeatPumpCoordinator  # noqa: E402
 from spo_pool_heat_pump.drivers.base import HeatPumpState  # noqa: E402
 from spo_pool_heat_pump.drivers.pc1002_bus import Pc1002BusDriver  # noqa: E402
@@ -181,6 +181,94 @@ def test_coordinator_stale_does_not_reconnect_while_frames_arrive() -> None:
             assert coord.state.available is False
             await asyncio.sleep(0.06)
             assert client.reconnect.await_count == 1
+        coord._stale_handle.cancel()
+
+    asyncio.run(run())
+
+
+def _coord(hass, client, options=None):
+    entry = MagicMock()
+    entry.data = {"host": "10.0.0.8", "port": 8899, "profile": "mida_cosma_pc1002"}
+    entry.options = options or {}
+    entry.unique_id = "uid"
+    entry.title = "Pump"
+    entry.entry_id = "e1"
+    coord = PoolHeatPumpCoordinator(hass, entry, client)
+    coord.async_set_updated_data = lambda state: setattr(coord, "data", state)
+    coord.async_set_update_error = lambda exc: None
+    return coord
+
+
+def test_dr164_atz_after_long_silence_when_tcp_up() -> None:
+    """60 s of no frames + TCP still up is the DE jam, not a dropped radio."""
+
+    async def run() -> None:
+        hass = MagicMock()
+        hass.loop = asyncio.get_running_loop()
+        client = MagicMock()
+        client.connected = True
+        client.reconnect = AsyncMock()
+        reboot = AsyncMock(return_value="10.0.0.8,AA,USR-DR164")
+        coord = _coord(hass, client)
+        state = HeatPumpState(available=True, serial="B99")
+        with (
+            patch("spo_pool_heat_pump.coordinator.STALE_SECONDS", 0.04),
+            patch("spo_pool_heat_pump.coordinator.DR164_SILENCE_REBOOT_S", 0.10),
+            patch("spo_pool_heat_pump.coordinator.DR164_REBOOT_COOLDOWN_S", 1.0),
+            patch("spo_pool_heat_pump.coordinator.reboot_dr164", reboot),
+        ):
+            coord._push(state)
+            await asyncio.sleep(0.07)
+            assert reboot.await_count == 0
+            await asyncio.sleep(0.08)
+            assert reboot.await_count == 1
+            reboot.assert_awaited_with("10.0.0.8")
+            await asyncio.sleep(0.08)
+            assert reboot.await_count == 1
+        coord._stale_handle.cancel()
+
+    asyncio.run(run())
+
+
+def test_dr164_atz_skipped_when_tcp_down() -> None:
+    async def run() -> None:
+        hass = MagicMock()
+        hass.loop = asyncio.get_running_loop()
+        client = MagicMock()
+        client.connected = False
+        client.reconnect = AsyncMock()
+        reboot = AsyncMock()
+        coord = _coord(hass, client)
+        with (
+            patch("spo_pool_heat_pump.coordinator.STALE_SECONDS", 0.04),
+            patch("spo_pool_heat_pump.coordinator.DR164_SILENCE_REBOOT_S", 0.05),
+            patch("spo_pool_heat_pump.coordinator.reboot_dr164", reboot),
+        ):
+            coord._push(HeatPumpState(available=True, serial="B99"))
+            await asyncio.sleep(0.12)
+            assert reboot.await_count == 0
+        coord._stale_handle.cancel()
+
+    asyncio.run(run())
+
+
+def test_dr164_atz_skipped_when_disabled() -> None:
+    async def run() -> None:
+        hass = MagicMock()
+        hass.loop = asyncio.get_running_loop()
+        client = MagicMock()
+        client.connected = True
+        client.reconnect = AsyncMock()
+        reboot = AsyncMock()
+        coord = _coord(hass, client, {CONF_REBOOT_DR164_ON_SILENCE: False})
+        with (
+            patch("spo_pool_heat_pump.coordinator.STALE_SECONDS", 0.04),
+            patch("spo_pool_heat_pump.coordinator.DR164_SILENCE_REBOOT_S", 0.05),
+            patch("spo_pool_heat_pump.coordinator.reboot_dr164", reboot),
+        ):
+            coord._push(HeatPumpState(available=True, serial="B99"))
+            await asyncio.sleep(0.12)
+            assert reboot.await_count == 0
         coord._stale_handle.cancel()
 
     asyncio.run(run())

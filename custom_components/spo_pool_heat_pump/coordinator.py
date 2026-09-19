@@ -14,16 +14,21 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    CONF_HOST,
     CONF_POLL_INTERVAL,
     CONF_PROFILE,
     CONF_WRITE_PATH,
     DOMAIN,
+    DR164_REBOOT_COOLDOWN_S,
+    DR164_SILENCE_REBOOT_S,
     STALE_SECONDS,
     WRITE_PATH_SLAVE2,
     apply_runtime_overrides,
+    reboot_dr164_on_silence_enabled,
     reload_option_fingerprint,
     service_menu_writes_enabled,
 )
+from .dr164_at import Dr164AtError, reboot_dr164
 from .cop import cop_options
 from .drivers import HeatPumpDriver, HeatPumpState, build_driver
 from .dump import (
@@ -133,6 +138,8 @@ class PoolHeatPumpCoordinator(DataUpdateCoordinator[HeatPumpState]):
             self.driver.set_poll_interval(self.update_interval.total_seconds())
         self._stale_handle: asyncio.TimerHandle | None = None
         self._last_frame_at: float | None = None
+        self._started_at = time.monotonic()
+        self._last_dr164_reboot_at: float | None = None
         self._settings_refresh_once = False
         self.reload_fingerprint = reload_option_fingerprint(entry.data, entry.options)
         self.force_seq = 0
@@ -326,6 +333,61 @@ class PoolHeatPumpCoordinator(DataUpdateCoordinator[HeatPumpState]):
         last = self._last_frame_at
         return last is None or (time.monotonic() - last) >= STALE_SECONDS
 
+    def _silence_s(self) -> float:
+        last = self._last_frame_at
+        origin = last if last is not None else self._started_at
+        return time.monotonic() - origin
+
+    def _should_reboot_dr164(self) -> bool:
+        """True when the DR164 is on the LAN but RS-485 has been dead too long.
+
+        TCP still up + no frame is the 2026-09-17 DE-jam picture, not a WiFi
+        drop (that loses the socket). The 15 s stale tick already redials TCP;
+        this is the next step. Skip listen_only / poll_master. Skip a recent
+        AT+Z so we do not loop during the ~20 s boot. A pending write does not
+        block this: after 60 s of zero frames the write is already lost.
+        """
+        if self.profile.get("driver", {}).get("type") != "pc1002_bus":
+            return False
+        if not reboot_dr164_on_silence_enabled(self.entry.data, self.entry.options):
+            return False
+        if not getattr(self.client, "connected", False):
+            return False
+        if self._silence_s() < DR164_SILENCE_REBOOT_S:
+            return False
+        last = self._last_dr164_reboot_at
+        if last is not None and (time.monotonic() - last) < DR164_REBOOT_COOLDOWN_S:
+            return False
+        return True
+
+    def _maybe_reboot_dr164(self) -> None:
+        if not self._should_reboot_dr164():
+            return
+        host = self.entry.data.get(CONF_HOST)
+        if not host:
+            return
+        # Stamp before the await so two stale ticks cannot queue two AT+Z.
+        self._last_dr164_reboot_at = time.monotonic()
+        _LOGGER.warning(
+            "RS-485 silent for %.0fs while TCP to %s is up; rebooting DR164 "
+            "(AT+Z over UDP 48899). Slave-2 TX can leave this module's auto-DE "
+            "asserted; AT+Z released the live bus on 2026-09-17 with no Modbus. "
+            "Do not use FC03 for this.",
+            self._silence_s(),
+            host,
+        )
+        self._create_task(self._async_reboot_dr164(str(host)), "spo_pool_heat_pump_dr164_reboot")
+
+    async def _async_reboot_dr164(self, host: str) -> None:
+        try:
+            banner = await reboot_dr164(host)
+        except Dr164AtError as err:
+            _LOGGER.warning("DR164 AT+Z handshake failed: %s", err)
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning("DR164 AT+Z failed", exc_info=True)
+        else:
+            _LOGGER.info("DR164 AT+Z sent (%s)", banner)
+
     def _mark_stale(self) -> None:
         """No fresh *broadcast* for STALE_SECONDS — maybe reconnect, maybe unavailable.
 
@@ -336,6 +398,7 @@ class PoolHeatPumpCoordinator(DataUpdateCoordinator[HeatPumpState]):
         """
         if self._bus_is_silent():
             self._kick_transport()
+            self._maybe_reboot_dr164()
         self._arm_stale()
         if self._has_pending_writes():
             return
