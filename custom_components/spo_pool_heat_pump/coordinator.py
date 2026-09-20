@@ -397,8 +397,14 @@ class PoolHeatPumpCoordinator(DataUpdateCoordinator[HeatPumpState]):
         pause, when broadcasts can be 20 s apart while the bus is fully alive.
         """
         if self._bus_is_silent():
-            self._kick_transport()
+            # Decide on AT+Z *before* the TCP kick. hass.async_create_task starts
+            # the reconnect coroutine eagerly, so by the time the next statement
+            # runs reconnect() has already called writer.close() and
+            # client.connected reads False. With the calls the other way round
+            # the gate never opened: live box 2026-09-19 15:15 → 09:00, 18 h of
+            # "bus silent" redials every 15 s and not one AT+Z.
             self._maybe_reboot_dr164()
+            self._kick_transport()
         self._arm_stale()
         if self._has_pending_writes():
             return

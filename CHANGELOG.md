@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **DR164 silent-bus recovery.** If no RS-485 frame arrives for 60 s while TCP :8899 is still up, Home Assistant sends `AT+Z` over UDP 48899 (same handshake as Event-off). Live 2026-09-17: slave-2 replies could leave the module holding the pair; a module reboot released the bus with no Modbus write. Default on for PC1002; turn off under Configure. 15 s unavailable / TCP redial is unchanged
+- **DR164 silent-bus recovery.** If no RS-485 frame arrives for 60 s while TCP :8899 is still up, Home Assistant sends `AT+Z` over UDP 48899 (same handshake as Event-off). Live 2026-09-17: slave-2 replies could leave the module holding the pair; a module reboot released the bus with no Modbus write. Default on for PC1002; turn off under Configure. 15 s unavailable / TCP redial is unchanged. The AT+Z decision must run *before* that redial: `hass.async_create_task` starts `reconnect()` eagerly and `client.connected` is already False one statement later, so the 60 s gate never opened on the live box (2026-09-19 15:15 → next morning, 18 h of silent-bus redials and not one `AT+Z`)
 - `tools/rs485-dump`: listen-only USB tap (UTS-T02). `dump.py` writes the raw `.log`; `analyze.py` is an optional Modbus view. Not in HACS
 - README is the user guide; protocol, write path, DR164 timing, and tests moved to [docs/development.md](docs/development.md)
 - `tools/dr164_event_off.py` (and `.cmd`) turns DR164 Event off over UDP 48899 — same `www.usr.cn` / `+ok` handshake as the README

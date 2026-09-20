@@ -230,6 +230,48 @@ def test_dr164_atz_after_long_silence_when_tcp_up() -> None:
     asyncio.run(run())
 
 
+def test_dr164_atz_decided_before_reconnect_closes_socket() -> None:
+    """Regression for the 2026-09-19 18 h outage.
+
+    On the live box hass.async_create_task starts reconnect() eagerly, so the
+    socket is already closing (connected == False) one statement after the
+    kick. The AT+Z gate must read `connected` before the kick, not after.
+    Modelled here with a synchronous reconnect that drops `connected` at once.
+    """
+
+    async def run() -> None:
+        hass = MagicMock()
+        hass.loop = asyncio.get_running_loop()
+        client = MagicMock()
+        client.connected = True
+        kicks: list[int] = []
+
+        def reconnect():
+            # Eager start: writer.close() has run before the gate is consulted;
+            # the read loop redials a few ms later (live log: 4 ms).
+            client.connected = False
+            kicks.append(1)
+            hass.loop.call_soon(setattr, client, "connected", True)
+            return None
+
+        client.reconnect = reconnect
+        reboot = AsyncMock(return_value="10.0.0.8,AA,USR-DR164")
+        coord = _coord(hass, client)
+        with (
+            patch("spo_pool_heat_pump.coordinator.STALE_SECONDS", 0.04),
+            patch("spo_pool_heat_pump.coordinator.DR164_SILENCE_REBOOT_S", 0.10),
+            patch("spo_pool_heat_pump.coordinator.DR164_REBOOT_COOLDOWN_S", 1.0),
+            patch("spo_pool_heat_pump.coordinator.reboot_dr164", reboot),
+        ):
+            coord._push(HeatPumpState(available=True, serial="B99"))
+            await asyncio.sleep(0.15)
+            assert len(kicks) >= 3
+            assert reboot.await_count == 1
+        coord._stale_handle.cancel()
+
+    asyncio.run(run())
+
+
 def test_dr164_atz_skipped_when_tcp_down() -> None:
     async def run() -> None:
         hass = MagicMock()
