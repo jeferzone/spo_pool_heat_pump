@@ -479,6 +479,15 @@ class PoolHeatPumpCoordinator(DataUpdateCoordinator[HeatPumpState]):
         await self.driver.async_start()
         # listen_only async_start publishes available=True; sync to the live socket.
         self._on_tcp_connection(self.client.connected)
+        # Arm the stale timer now, not on the first frame. _push() is the only
+        # other place that arms it, and _push() needs a frame. When Home
+        # Assistant starts into a bus that is already jammed (DR164 DE held
+        # after a slave-2 reply) no frame ever comes, so neither the 15 s TCP
+        # redial nor the 60 s AT+Z could ever run: live box 2026-09-21, bus
+        # dead since 06:03, restart at 16:24 onto f1965e0, still grey with no
+        # AT+Z warning 5 min later. _silence_s() falls back to _started_at
+        # while _last_frame_at is None, so the 60 s gate counts from here.
+        self._arm_stale()
 
     async def async_stop(self) -> None:
         if self._stale_handle:

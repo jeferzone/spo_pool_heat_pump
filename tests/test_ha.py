@@ -272,6 +272,43 @@ def test_dr164_atz_decided_before_reconnect_closes_socket() -> None:
     asyncio.run(run())
 
 
+def test_dr164_atz_fires_when_bus_dead_at_startup() -> None:
+    """Regression for 2026-09-21: restart onto an already-jammed bus.
+
+    No frame ever arrives, so _push() never runs. The stale timer must be armed
+    by async_start() itself, or the redial and AT+Z never get a first tick.
+    """
+
+    async def run() -> None:
+        hass = MagicMock()
+        hass.loop = asyncio.get_running_loop()
+        client = MagicMock()
+        client.connected = True
+        client.start = AsyncMock()
+        client.reconnect = AsyncMock()
+        client.send = AsyncMock()
+        reboot = AsyncMock(return_value="10.0.0.8,AA,USR-DR164")
+        coord = _coord(hass, client)
+        with (
+            patch("spo_pool_heat_pump.coordinator.STALE_SECONDS", 0.04),
+            patch("spo_pool_heat_pump.coordinator.DR164_SILENCE_REBOOT_S", 0.10),
+            patch("spo_pool_heat_pump.coordinator.DR164_REBOOT_COOLDOWN_S", 1.0),
+            patch("spo_pool_heat_pump.coordinator.reboot_dr164", reboot),
+        ):
+            await coord.async_start()
+            assert coord._stale_handle is not None
+            await asyncio.sleep(0.07)
+            assert client.reconnect.await_count >= 1
+            assert reboot.await_count == 0
+            await asyncio.sleep(0.10)
+            assert reboot.await_count == 1
+            reboot.assert_awaited_with("10.0.0.8")
+        coord._stale_handle.cancel()
+        await coord.driver.async_stop()
+
+    asyncio.run(run())
+
+
 def test_dr164_atz_skipped_when_tcp_down() -> None:
     async def run() -> None:
         hass = MagicMock()
