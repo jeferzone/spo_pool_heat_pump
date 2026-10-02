@@ -26,12 +26,13 @@
     "link": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["baud", "parity", "stop_bits", "slaves"],
       "properties": {
         "baud": { "type": "integer" },
         "parity": { "type": "string" },
         "stop_bits": { "type": "integer" },
-        "slaves": { "type": "object" }
+        "slaves": { "type": "object" },
+        "transport": { "type": "string" },
+        "default_port": { "type": "integer" }
       }
     },
     "driver": {
@@ -39,7 +40,7 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": { "type": "string", "enum": ["pc1002_bus", "poll_master", "listen_only"] },
+        "type": { "type": "string", "enum": ["pc1002_bus", "poll_master", "listen_only", "simplewifi_tcp"] },
         "write_targets": { "type": "array", "items": { "type": "string" } },
         "default_write": { "type": "string" },
         "power_also_write": { "type": "array", "items": { "type": "integer" } },
@@ -65,9 +66,9 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
-          "type": { "type": "string", "enum": ["u16", "i16", "bool", "enum", "bits", "faults", "ascii", "bcd_hms"] },
+          "type": { "type": "string", "enum": ["u8", "u16", "i16", "bool", "enum", "bits", "faults", "ascii", "bcd_hms"] },
           "reg": { "type": "integer" },
-          "write": { "type": "integer" },
+          "write": { "type": ["integer", "boolean"] },
           "prefer": { "type": "string", "enum": ["settings"] },
           "regs": { "type": "array", "items": { "type": "integer" } },
           "scale": { "type": "number" },
@@ -82,7 +83,16 @@
           "write_fc": { "type": "integer" },
           "nonzero": { "type": "boolean" },
           "codes": { "type": "object" },
-          "entity": { "type": "object" }
+          "entity": { "type": "object" },
+          "frame": { "type": "string", "pattern": "^[0-9A-Fa-f]{2}/[0-9]+$" },
+          "group": { "type": "string", "pattern": "^[0-9A-Fa-f]{1,2}$" },
+          "byte": { "type": "integer", "minimum": 0 },
+          "bytes": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+          "confidence": { "type": "string", "enum": ["confirmed", "probable", "hypothesis"] },
+          "bit_confidence": {
+            "type": "object",
+            "additionalProperties": { "type": "string", "enum": ["confirmed", "probable", "hypothesis"] }
+          }
         },
         "additionalProperties": false
       }
@@ -119,6 +129,26 @@
               }
             }
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "driver": { "properties": { "type": { "not": { "const": "simplewifi_tcp" } } } } }
+      },
+      "then": {
+        "properties": {
+          "link": { "required": ["baud", "parity", "stop_bits", "slaves"] }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "driver": { "properties": { "type": { "const": "simplewifi_tcp" } } } }
+      },
+      "then": {
+        "properties": {
+          "link": { "required": ["transport"] }
         }
       }
     }

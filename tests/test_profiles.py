@@ -67,6 +67,7 @@ def test_schema_matches_loader_contract() -> None:
         "pc1002_bus",
         "poll_master",
         "listen_only",
+        "simplewifi_tcp",
     ]
 
 
@@ -84,6 +85,72 @@ def test_schema_rejects_pc1002_without_broadcast() -> None:
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
     raw = json.loads((PROFILES / "phnix_mini_pc1002.json").read_text(encoding="utf-8"))
     del raw["driver"]["broadcast"]
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(raw, schema)
+
+
+def _minimal_simplewifi_profile() -> dict:
+    """Not a shipped file — just enough to exercise the byte-addressed schema."""
+    return {
+        "identity": {
+            "id": "test_simplewifi",
+            "brand": "Test",
+            "model": "Unit",
+            "verification": "experimental",
+        },
+        "link": {"transport": "tcp_simplewifi", "default_port": 60000},
+        "driver": {"type": "simplewifi_tcp"},
+        "modes": ["heat"],
+        "enums": {},
+        "registers": {
+            "power": {"frame": "80/1", "byte": 0, "type": "bool"},
+            "setpoint": {"frame": "80/1", "byte": 4, "type": "u8"},
+        },
+    }
+
+
+def test_simplewifi_tcp_is_a_valid_driver_type() -> None:
+    validate_profile(_minimal_simplewifi_profile())
+
+
+def test_simplewifi_tcp_register_requires_frame() -> None:
+    profile = _minimal_simplewifi_profile()
+    del profile["registers"]["power"]["frame"]
+    with pytest.raises(ProfileError, match="frame"):
+        validate_profile(profile)
+
+
+def test_simplewifi_tcp_register_requires_byte_or_bytes() -> None:
+    profile = _minimal_simplewifi_profile()
+    del profile["registers"]["power"]["byte"]
+    with pytest.raises(ProfileError, match="byte"):
+        validate_profile(profile)
+
+    profile["registers"]["power"]["bytes"] = [0]
+    validate_profile(profile)  # `bytes` alone is also accepted
+
+
+def test_schema_accepts_simplewifi_tcp_profile() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+    jsonschema.validate(_minimal_simplewifi_profile(), schema)
+
+
+def test_schema_rejects_simplewifi_tcp_without_link_transport() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+    profile = _minimal_simplewifi_profile()
+    del profile["link"]["transport"]
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(profile, schema)
+
+
+def test_schema_still_requires_serial_link_fields_for_modbus_profiles() -> None:
+    """The new simplewifi_tcp link shape must not loosen the existing ones."""
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+    raw = json.loads((PROFILES / "mida_cosma_pc1002.json").read_text(encoding="utf-8"))
+    del raw["link"]["baud"]
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(raw, schema)
 

@@ -287,7 +287,7 @@ def validate_profile(data: dict[str, Any]) -> None:
     _require(data["identity"], REQUIRED_IDENTITY, "identity")
     if data["identity"]["verification"] not in ("verified", "community", "experimental"):
         raise ProfileError("identity.verification")
-    if data["driver"]["type"] not in ("pc1002_bus", "poll_master", "listen_only"):
+    if data["driver"]["type"] not in ("pc1002_bus", "poll_master", "listen_only", "simplewifi_tcp"):
         raise ProfileError("driver.type")
     for key, spec in profile_registers(data).items():
         if not isinstance(spec, dict):
@@ -295,6 +295,7 @@ def validate_profile(data: dict[str, Any]) -> None:
         if "kind" in spec:
             raise ProfileError(f"register {key} uses kind; use type")
         if spec.get("type") not in (
+            "u8",
             "u16",
             "i16",
             "bool",
@@ -321,6 +322,14 @@ def validate_profile(data: dict[str, Any]) -> None:
             raise ProfileError("pc1002_bus missing driver.broadcast start/qty")
         if menu and not menu.get("pages"):
             raise ProfileError("service_menu missing pages")
+    if data["driver"]["type"] == "simplewifi_tcp":
+        # This link has no Modbus register space: every value lives at a byte
+        # offset inside one named (type/page) frame, never at an int "reg".
+        for key, spec in profile_registers(data).items():
+            if "frame" not in spec:
+                raise ProfileError(f"simplewifi_tcp register {key} missing frame")
+            if "byte" not in spec and "bytes" not in spec:
+                raise ProfileError(f"simplewifi_tcp register {key} missing byte/bytes")
 
 
 def service_menu_params(profile: dict[str, Any]) -> dict[str, Any]:
@@ -355,6 +364,8 @@ def validate_service_menu_write(profile: dict[str, Any], enabled: bool, key: str
 def decode_value(spec: dict[str, Any], raw: int, enums: dict[str, dict[str, str]]) -> Any:
     if spec.get("transform") == "fairland_temp":
         return (raw - 96) / 2 + 18
+    if spec.get("transform") == "astral_temp":
+        return raw / 2 - 30
     if is_bool_spec(spec):
         if spec.get("nonzero") or spec.get("kind") == "bool_nonzero":
             return raw != 0
@@ -383,6 +394,8 @@ def encode_value(spec: dict[str, Any], value: Any, enums: dict[str, dict[str, st
         return 1 if value else 0
     if spec.get("transform") == "fairland_temp":
         return int(round((float(value) - 18) * 2 + 96))
+    if spec.get("transform") == "astral_temp":
+        return int(round((float(value) + 30) * 2))
     scale = spec.get("scale", 1)
     if scale and scale != 1:
         return int(round(float(value) / scale))
