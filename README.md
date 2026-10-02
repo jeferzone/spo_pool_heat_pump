@@ -8,6 +8,8 @@ Requires Home Assistant 2026.6.0 or later. You get a Device with `climate`, sens
 
 **Hardware.** A **USR-DR164** on the factory RS-485 port for Home Assistant. A cheap USB RS-485 stick (**UTS-T02** or similar) if the pump is not fully supported yet or you need to debug.
 
+**Simple-WiFi pumps.** Pumps with a built-in Simple-WiFi module (Astral Pool Top +12) are also supported over the LAN, no RS-485 — see [Astral Top +12 (Simple-WiFi)](#astral-top-12-simple-wifi) below.
+
 **New or incomplete pumps.** Start with a listen-only wire capture: [RS-485 ModBus dump](tools/rs485-dump/README.md). Once you have dumps you may share them and [open a feature request](https://github.com/spongioblast/spo_pool_heat_pump/issues/new).
 
 Protocol, write path, DR164 timing, tests, and the simulator: [docs/development.md](docs/development.md). Adding a profile: [docs/profiles.md](docs/profiles.md).
@@ -23,6 +25,7 @@ The Aqua Temp **phone app** does not prove this integration will work. The outdo
 | PHNIX Mini / SuperMini / SpecialLine, Thermotec | Shipped map, not live-tested | PHNIX Mini |
 | Fairland / Norsup CN13 | Shipped map, not live-tested. Polled, slave **50** (menu H37) | Fairland CN13 |
 | Fairland IPS Pro / InverX / IPHCR | Shipped map, not live-tested. Polled, slave **1** | Fairland IPS Pro |
+| **Astral Pool Top +12** (built-in Simple-WiFi module) | Different wire — TCP straight to the pump's own module, no DR164. See [Astral Top +12 (Simple-WiFi)](#astral-top-12-simple-wifi) | Astral Top +12 |
 | Not listed, or setup cannot pick a profile | Capture only — no decode, no write | **Unknown heat pump — dump only** |
 
 **Verified** means Home Assistant talks as a second display. Reads and everyday writes (mode, heat setpoint, quiet; the same path also does power, timers, and cool/auto) were measured on a live Cosma.
@@ -83,6 +86,16 @@ On the DR164 web UI (save and restart after these pages):
 
 Port `8899` is ready. Use the reserved LAN IP in the next step.
 
+## Astral Top +12 (Simple-WiFi)
+
+The Top +12 has a WiFi module built into the pump ("Simple-WiFi"; the OEM cloud app is PhnixSmart) and talks a different, non-Modbus protocol directly to that module over TCP — there is no DR164 and no RS-485 wiring on this path. Skip [Wire the DR164](#wire-the-dr164) through [Set the DR164 work mode](#set-the-dr164-work-mode) entirely.
+
+1. Join the module to the home WiFi the way the pump's own setup normally does that (not covered here).
+2. Reserve its DHCP lease (or set a static IP) on the same LAN as Home Assistant, so the address does not change.
+3. In step 6 of [Add it to Home Assistant](#add-it-to-home-assistant) below, use that IP as **Host** and **`60000`** as **Port** (not `8899`), and pick **Astral Top +12** from the profile dropdown — the 5 s Modbus listen will not find anything on this wire, so setup would otherwise suggest dump-only.
+
+One TCP client only, same constraint as the DR164 — the module accepts a single connection. If a phone app is connected to the module on the same LAN, disconnect it first. **Write path**, **Modbus slave (H37)**, and **Poll interval** under [Options](#options) do not apply to this profile. Protocol details (framing, push timing, write/retry, and why pages `80/6`/`80/7` are never read): [docs/development.md](docs/development.md#simple-wifi-protocol-astral-top-12).
+
 ## Add it to Home Assistant
 
 This is a **HACS** custom integration (Home Assistant Community Store). It is not a Core add-on and not in the HACS default store. Host in setup is the reserved DR164 IP from above.
@@ -92,7 +105,7 @@ This is a **HACS** custom integration (Home Assistant Community Store). It is no
 3. Repository: [https://github.com/spongioblast/spo_pool_heat_pump](https://github.com/spongioblast/spo_pool_heat_pump). Type: **Integration** → Add.
 4. HACS → search **SPO Pool Heat Pump** → **Download**. A GitHub Release is used if one exists; otherwise HACS follows `main`.
 5. **Restart** Home Assistant.
-6. **Settings → Devices & services → Add integration → SPO Pool Heat Pump**. Host = the reserved DR164 IP, port `8899`. Setup listens a few seconds and picks a profile — keep it unless [Supported heat pumps](#supported-heat-pumps) says otherwise. Leave **Write path** on **Second panel (slave 2)** and **Allow changing service settings** off.
+6. **Settings → Devices & services → Add integration → SPO Pool Heat Pump**. Host = the reserved DR164 IP, port `8899` (Astral Top +12: the module's own IP, port `60000` — see [Astral Top +12 (Simple-WiFi)](#astral-top-12-simple-wifi)). Setup listens a few seconds and picks a profile — keep it unless [Supported heat pumps](#supported-heat-pumps) says otherwise. Leave **Write path** on **Second panel (slave 2)** and **Allow changing service settings** off.
 7. Add the card to a dashboard: **Edit dashboard → Add card**, search **SPO Pool Heat Pump**. Reload the browser tab after the restart so the card module loads. Do not add a Lovelace / Dashboard resource.
 
 If the reserved IP or port changes later, use **Reconfigure** (host and port only). Profile and write path stay under **Configure**. Do not add Home Assistant’s core **Modbus** integration.

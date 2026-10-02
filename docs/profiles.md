@@ -26,15 +26,15 @@ HA device manufacturer = `brand`, model = `model`. Fault JSON `_faults_pc1002.js
 ## Required top-level keys
 
 - `identity` — naming above, plus `verification` (`verified` | `community` | `experimental`) and `source`
-- `link` — `baud`, `parity`, `stop_bits`, `slaves`
-- `driver` — `type`: `pc1002_bus`, `poll_master`, or `listen_only` (dump-only, no map)
+- `link` — `baud`, `parity`, `stop_bits`, `slaves` (Modbus profiles) or `transport` + `default_port` (`simplewifi_tcp` profiles, see below)
+- `driver` — `type`: `pc1002_bus`, `poll_master`, `listen_only` (dump-only, no map), or `simplewifi_tcp` (byte-addressed push protocol, see below)
 - `modes` — subset of `heat`, `cool`, `auto` (climate HVAC modes come from this)
 - `enums` — especially `mode` (MIDA Cosma is 0 cool / 1 heat / 2 auto; some Fairland maps invert this)
 - `registers` — typed rows. Core climate/card keys stay on `HeatPumpState`; extra keys go to `state.values`
 
 ## Register vocabulary
 
-`type` is one of `u16`, `i16`, `bool`, `enum`, `bits`, `faults`, `ascii`, `bcd_hms`. Fairland coil maps may add `transform: fairland_temp`. Protocol `bitfield` becomes `bits`.
+`type` is one of `u16`, `i16`, `u8`, `bool`, `enum`, `bits`, `faults`, `ascii`, `bcd_hms`. Fairland coil maps may add `transform: fairland_temp`; `simplewifi_tcp` profiles use `u8` with `transform: astral_temp` (`raw/2-30`) for 1-byte temperatures/setpoint. Protocol `bitfield` becomes `bits`.
 
 ```json
 "mode": { "reg": 2012, "write": 1012, "prefer": "settings", "enum": "mode", "type": "enum" },
@@ -66,6 +66,8 @@ Climate modes come from `modes`. Sensors and switches appear when the register k
 
 `listen_only` is the **Unknown heat pump — dump only** profile. It does not decode or write. The climate entity stays available so the card Settings → **Bus dump** can record raw RS-485. After you have a dump, **Configure** that same entry and pick a real profile (or add a new JSON). Do not Add the integration a second time on the same DR164 — one TCP client only. Detection offers dump-only when the 5 s listen and the slave 50 / slave 1 probes see nothing.
 
+`simplewifi_tcp` is not a Modbus profile at all — it talks straight to the pump's own built-in WiFi module over TCP (no DR164). Registers are addressed by `frame` (`"80/1"`, `"D0/1"` — hex frame type / page) and `byte` (or `bytes` for `ascii`) instead of `reg`; there is no register space to read a count from. On page 0 a `group` (hex id string, e.g. `"4F"`) picks one of several sub-blocks that page rotates through — a register pinned to a group simply reads `None`/unknown until that group's own turn has come at least once, and that never blocks the rest of the device from being available. The module pushes frames on its own, so the driver is `is_push` and never runs its own poll loop; its own read request is only a silence-triggered fallback. `confidence` (register-level) and `bit_confidence` (per bit, on a `bits` register) are `confirmed` / `probable` / `hypothesis` — pure documentation carried in the JSON, not read by any code, so a profile can ship a field nobody has measured yet without pretending it is certain. Pages carrying the module's plaintext Wi-Fi password must never be mapped as a register — the driver discards them before they ever reach its own cache, not just before the UI. Wire format, push timing, and the write/retry and security rules: [development.md](development.md#simple-wifi-protocol-astral-top-12).
+
 `fixtures.frames` are CRC-valid hex strings. Optional `fixtures.dump` points at a repo dump.
 
 ## Faults and service-menu catalogs
@@ -95,9 +97,10 @@ The card Settings dialog (and optional `spo-pool-heat-pump-settings-card`) plus 
 | `phnix_mini_pc1002` | PHNIX | Mini | pc1002 | community |
 | `fairland_pc1004_cn13` | Fairland | PC1004 CN13 | pc1004 | community |
 | `fairland_ips_pro_coils` | Fairland | IPS Pro | fairland_coils | community |
+| `astral_top12_simplewifi` | Astral Pool | Top +12 | simplewifi | community |
 | `unknown_dump_only` | Unknown | Dump only | listen | experimental (no map) |
 
-Detection: 5 s listen for a 2001×90 broadcast. Firmware 713/772 → MIDA Cosma; Mini firmware at 2017 → PHNIX Mini; any other 2001 → Hayward (user can override). Silent bus probes slave 50 FC03 1011×3, then slave 1 FC01 coil 0. If nothing matches, the picker suggests **dump only**. Old ids (`cosmo_pc1002`, `phnix_mini_rs485`, `fairland_legacy_coils`) still load.
+Detection: 5 s listen for a 2001×90 broadcast. Firmware 713/772 → MIDA Cosma; Mini firmware at 2017 → PHNIX Mini; any other 2001 → Hayward (user can override). Silent bus probes slave 50 FC03 1011×3, then slave 1 FC01 coil 0. If nothing matches, the picker suggests **dump only**. Old ids (`cosmo_pc1002`, `phnix_mini_rs485`, `fairland_legacy_coils`) still load. `astral_top12_simplewifi` is not part of that RS-485 probe — it is a different wire (TCP 60000 to the pump's own module) and is picked manually in the dropdown.
 
 ## Same bus, no extra JSON
 
