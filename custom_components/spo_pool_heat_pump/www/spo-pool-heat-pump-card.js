@@ -639,7 +639,8 @@ function airMark(s4, x2, y3) {
   return w`<text class="k" x=${x2} y=${y3} text-anchor="middle">air</text><text class="v" x=${x2} y=${y3 + 18} text-anchor="middle">${f1(s4.ambient)}°</text>`;
 }
 function dtMark(s4, x2, y3) {
-  const d3 = s4.pump && s4.power && s4.outlet != null && s4.inlet != null ? s4.outlet - s4.inlet : null;
+  const flowing = s4.caps.pumpSensor ? s4.pump : s4.power;
+  const d3 = flowing && s4.outlet != null && s4.inlet != null ? s4.outlet - s4.inlet : null;
   const t3 = d3 == null ? "\u2013" : `${d3 >= 0 ? "+" : ""}${f1(d3)}\xB0`;
   return w`<text class="k halo" x=${x2} y=${y3} text-anchor="end">ΔT ${t3}</text>`;
 }
@@ -1440,7 +1441,10 @@ var PoolHeatPumpCard = class extends i4 {
       energy: kwh24 != null,
       compressor: pct != null,
       ambient: ambient != null,
-      fan: fanRpm != null
+      fan: fanRpm != null,
+      // The entity does not exist at all for a profile with no real water-pump
+      // bit (simplewifi_tcp) — distinct from existing but reporting "off".
+      pumpSensor: sib.pump_running != null
     };
     const status = !available ? "No data" : String(climate.attributes.activity || "No data");
     const action = STATUS_ACTION[status] || "idle";

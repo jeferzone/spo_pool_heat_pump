@@ -226,6 +226,9 @@ class PoolHeatPumpCard extends LitElement {
       compressor: pct != null,
       ambient: ambient != null,
       fan: fanRpm != null,
+      // The entity does not exist at all for a profile with no real water-pump
+      // bit (simplewifi_tcp) — distinct from existing but reporting "off".
+      pumpSensor: sib.pump_running != null,
     };
     const status = !available ? "No data" : String(climate.attributes.activity || "No data");
     const action = STATUS_ACTION[status] || "idle";

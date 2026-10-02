@@ -23,7 +23,7 @@ export type CardState = {
   dumpOnly: boolean;
   /** Register names written but not yet echoed by the heat pump (optimistic). */
   pending: string[];
-  caps: { cool: boolean; auto: boolean; silent: boolean; power: boolean; energy: boolean; compressor: boolean; ambient: boolean; fan: boolean };
+  caps: { cool: boolean; auto: boolean; silent: boolean; power: boolean; energy: boolean; compressor: boolean; ambient: boolean; fan: boolean; pumpSensor: boolean };
 };
 
 const COLD = "#38b6ff", WARM = "#ff8a3d", NEUT = "#7fb2c9";
@@ -115,7 +115,12 @@ function airMark(s: CardState, x: number, y: number) {
 }
 
 function dtMark(s: CardState, x: number, y: number) {
-  const d = s.pump && s.power && s.outlet != null && s.inlet != null ? s.outlet - s.inlet : null;
+  // "pump" is a compressor-action guess when the profile has no real water-pump
+  // sensor (simplewifi_tcp: the module exposes no water-pump bit at all, so the
+  // guess would otherwise hide a perfectly valid ΔT any time the pump is idle).
+  // Only gate on that guess when there is a real sensor to trust instead.
+  const flowing = s.caps.pumpSensor ? s.pump : s.power;
+  const d = flowing && s.outlet != null && s.inlet != null ? s.outlet - s.inlet : null;
   const t = d == null ? "–" : `${d >= 0 ? "+" : ""}${f1(d)}°`;
   return svg`<text class="k halo" x=${x} y=${y} text-anchor="end">ΔT ${t}</text>`;
 }
