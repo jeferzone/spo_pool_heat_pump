@@ -186,6 +186,44 @@ def test_coordinator_stale_does_not_reconnect_while_frames_arrive() -> None:
     asyncio.run(run())
 
 
+def test_coordinator_ignores_noise_for_a_modbus_driver() -> None:
+    """Bytes that aren't a real Modbus frame must not count as bus traffic.
+
+    async_on_frame asks the driver itself (HeatPumpDriver.is_live_frame,
+    default parse_frame(frame) is not None) rather than hardcoding Modbus —
+    this confirms that override keeps the original, stricter behavior for
+    pc1002_bus/poll_master/listen_only: Simple-WiFi-shaped noise must not
+    fool the stale-bus watchdog into thinking a Modbus link is alive.
+    """
+
+    async def run() -> None:
+        hass = MagicMock()
+        hass.loop = asyncio.get_running_loop()
+        entry = MagicMock()
+        entry.data = {"host": "10.0.0.8", "port": 8899, "profile": "mida_cosma_pc1002"}
+        entry.options = {}
+        entry.unique_id = "uid"
+        entry.title = "Pump"
+        entry.entry_id = "e1"
+        client = MagicMock()
+        client.reconnect = AsyncMock()
+        client.send = AsyncMock()
+        coord = PoolHeatPumpCoordinator(hass, entry, client)
+        coord.async_set_updated_data = lambda state: setattr(coord, "data", state)
+        coord.async_set_update_error = lambda exc: None
+        state = HeatPumpState(available=True, serial="B99")
+        noise = b"\xaa\x5a\xb1\x80\x01" + bytes(45)  # Simple-WiFi shaped, not a Modbus frame
+        with patch("spo_pool_heat_pump.coordinator.STALE_SECONDS", 0.05):
+            coord._push(state)
+            for _ in range(4):
+                await coord.async_on_frame(noise)
+                await asyncio.sleep(0.03)
+            assert client.reconnect.await_count >= 1
+        coord._stale_handle.cancel()
+
+    asyncio.run(run())
+
+
 def _coord(hass, client, options=None):
     entry = MagicMock()
     entry.data = {"host": "10.0.0.8", "port": 8899, "profile": "mida_cosma_pc1002"}

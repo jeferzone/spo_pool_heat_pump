@@ -456,9 +456,11 @@ class PoolHeatPumpCoordinator(DataUpdateCoordinator[HeatPumpState]):
             _LOGGER.debug("flag settings refresh failed", exc_info=True)
 
     async def async_on_frame(self, frame: bytes) -> None:
-        from .modbus_rtu import parse_frame
-
-        if parse_frame(frame) is not None:
+        # Each driver knows what a "real" frame looks like on its own wire
+        # (Modbus RTU here, the Simple-WiFi marker+CRC on SimpleWifiDriver,
+        # etc.) — hardcoding the Modbus check here would silently starve
+        # _note_frame() for any non-Modbus driver and never mark it available.
+        if self.driver.is_live_frame(frame):
             self._note_frame()
         reply = self.driver.handle_frame(frame)
         if reply:

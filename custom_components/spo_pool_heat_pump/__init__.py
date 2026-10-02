@@ -44,7 +44,7 @@ async def async_setup_entry(hass, entry):
     from .coordinator import PoolHeatPumpCoordinator
     from .frontend import async_register_card
     from .profiles import async_warm_profiles, load_profile, migrate_profile_fields
-    from .transport.tcp import TcpRtuClient
+    from .transport import build_transport
     from .websocket import async_register_websocket
 
     await async_warm_profiles(hass)
@@ -55,9 +55,9 @@ async def async_setup_entry(hass, entry):
     data, options, moved = migrate_entry_storage(data, options)
     if renamed or moved:
         hass.config_entries.async_update_entry(entry, data=data, options=options)
-    client = TcpRtuClient(data[CONF_HOST], int(data[CONF_PORT]))
     profile_id = options.get(CONF_PROFILE, data.get(CONF_PROFILE))
     profile = load_profile(profile_id)  # served from the warm cache
+    client = build_transport(profile, data[CONF_HOST], int(data[CONF_PORT]))
     coordinator = PoolHeatPumpCoordinator(hass, entry, client, profile)
     try:
         await coordinator.async_start()

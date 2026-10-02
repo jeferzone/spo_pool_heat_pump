@@ -6,6 +6,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..modbus_rtu import parse_frame
+
 
 @dataclass(slots=True)
 class HeatPumpState:
@@ -188,6 +190,18 @@ class HeatPumpDriver(ABC):
     def handle_frame(self, frame: bytes) -> bytes | None:
         """Consume one RTU frame. Return an optional reply (slave-2)."""
         return None
+
+    def is_live_frame(self, frame: bytes) -> bool:
+        """Does ``frame`` prove the bus/link is actually alive right now?
+
+        The coordinator's stale-bus watchdog (see coordinator.py::_note_frame)
+        calls this on every frame the transport hands up, independent of
+        handle_frame. The default is Modbus RTU's own notion of a real frame;
+        a driver on a different wire (see SimpleWifiDriver) overrides this
+        with its own validity check instead of a Modbus CRC that will never
+        match its frames.
+        """
+        return parse_frame(frame) is not None
 
     async def poll_once(self, wait_s: float = 0.8) -> None:
         return None
