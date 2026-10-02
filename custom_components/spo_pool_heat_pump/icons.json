@@ -67,6 +67,9 @@
       "pump_running": {
         "default": "mdi:pump"
       },
+      "fan_running": {
+        "default": "mdi:fan"
+      },
       "high_pressure": {
         "default": "mdi:gauge-full"
       },

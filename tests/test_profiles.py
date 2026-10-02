@@ -392,7 +392,7 @@ HARDCODED_TRANSLATION_KEYS = {
         "timer2_off_h",
         "timer2_off_min",
     },
-    "binary_sensor": {"compressor_running", "pump_running", "fault"},
+    "binary_sensor": {"compressor_running", "pump_running", "fan_running", "fault"},
 }
 
 

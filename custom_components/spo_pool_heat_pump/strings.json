@@ -181,6 +181,7 @@
     "binary_sensor": {
       "compressor_running": { "name": "Compressor running" },
       "pump_running": { "name": "Pump running" },
+      "fan_running": { "name": "Fan running" },
       "fault": { "name": "Fault" },
       "high_pressure": { "name": "High-pressure switch" },
       "low_pressure": { "name": "Low-pressure switch" },

@@ -540,3 +540,87 @@ def test_flag_refresh_cancelled_on_stop() -> None:
         assert not coord._flag_tasks
 
     asyncio.run(run())
+
+
+def _fake_coord(profile_id: str, state: HeatPumpState) -> MagicMock:
+    coord = MagicMock()
+    coord.profile = load_profile(profile_id)
+    coord.unique_id = "uid"
+    coord.state = state
+    coord.last_update_success = True
+    coord.device_name = "Pump"
+    return coord
+
+
+def test_astral_binary_sensors_skip_pump_running_add_fan_running() -> None:
+    from spo_pool_heat_pump import binary_sensor
+
+    state = HeatPumpState(
+        available=True,
+        outputs={"compressor": True, "fan": True, "outputs_5_6": False},
+    )
+    state.extras["fan_alt"] = False  # second source disagrees with the primary bit
+    coord = _fake_coord("astral_top12_simplewifi", state)
+    entry = MagicMock()
+    entry.runtime_data = coord
+    added: list = []
+
+    asyncio.run(binary_sensor.async_setup_entry(MagicMock(), entry, added.extend))
+
+    keys = {e.translation_key for e in added}
+    assert "pump_running" not in keys
+    assert "compressor_running" in keys
+    assert "fault" in keys
+    assert "fan_running" in keys
+
+    fan_entity = next(e for e in added if e.translation_key == "fan_running")
+    assert fan_entity.is_on is True
+    attrs = fan_entity.extra_state_attributes
+    assert attrs == {"group_4f_byte7": False, "mismatch_with_primary": True}
+
+
+def test_other_profile_keeps_pump_running_and_has_no_fan_running() -> None:
+    from spo_pool_heat_pump import binary_sensor
+
+    state = HeatPumpState(available=True, outputs={"compressor": True, "water_pump": True})
+    coord = _fake_coord("mida_cosma_pc1002", state)
+    entry = MagicMock()
+    entry.runtime_data = coord
+    added: list = []
+
+    asyncio.run(binary_sensor.async_setup_entry(MagicMock(), entry, added.extend))
+
+    keys = {e.translation_key for e in added}
+    assert "pump_running" in keys
+    assert "fan_running" not in keys
+
+
+def test_astral_sensors_skip_cop_display() -> None:
+    from spo_pool_heat_pump import sensor
+
+    state = HeatPumpState(available=True)
+    coord = _fake_coord("astral_top12_simplewifi", state)
+    entry = MagicMock()
+    entry.runtime_data = coord
+    added: list = []
+
+    asyncio.run(sensor.async_setup_entry(MagicMock(), entry, added.extend))
+
+    keys = {e.translation_key for e in added}
+    assert "cop_display" not in keys
+
+
+def test_other_profile_keeps_cop_display() -> None:
+    from spo_pool_heat_pump import sensor
+
+    state = HeatPumpState(available=True)
+    coord = _fake_coord("mida_cosma_pc1002", state)
+    coord.cop_options = {}
+    entry = MagicMock()
+    entry.runtime_data = coord
+    added: list = []
+
+    asyncio.run(sensor.async_setup_entry(MagicMock(), entry, added.extend))
+
+    keys = {e.translation_key for e in added}
+    assert "cop_display" in keys

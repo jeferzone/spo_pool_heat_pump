@@ -126,7 +126,10 @@ async def async_setup_entry(
         entities.append(EnergyTotalSensor(coord))
     if "clock" in mapping or coord.profile.get("service_menu") or coord.profile["driver"]["type"] == "pc1002_bus":
         entities.append(PanelClockSensor(coord))
-    if coord.profile["driver"]["type"] != "listen_only":
+    # simplewifi_tcp has neither a bus-reported cop register nor power_kw for
+    # the manual-flow calculation (resolve_cop), so the sensor would always
+    # read unavailable; only this driver type is excluded here.
+    if coord.profile["driver"]["type"] not in ("listen_only", "simplewifi_tcp"):
         entities.append(CopDisplaySensor(coord))
     claimed = {spec.key for spec in SENSORS} | {spec.key for spec in MAP_SENSORS.values()}
     claimed.update({"energy_total", "panel_clock", "inlet", "outlet", "ambient", "power", "fan", "coil", "exhaust", "cop_display"})
