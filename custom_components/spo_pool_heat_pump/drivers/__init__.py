@@ -9,6 +9,7 @@ from .base import HeatPumpDriver, HeatPumpState
 from .listen_only import DumpOnlyWriteError, ListenOnlyDriver
 from .pc1002_bus import Pc1002BusDriver
 from .poll_master import PollMasterDriver
+from .simplewifi import SimpleWifiDriver
 
 __all__ = [
     "DumpOnlyWriteError",
@@ -17,6 +18,7 @@ __all__ = [
     "ListenOnlyDriver",
     "Pc1002BusDriver",
     "PollMasterDriver",
+    "SimpleWifiDriver",
     "build_driver",
 ]
 
@@ -32,4 +34,6 @@ def build_driver(
         return PollMasterDriver(profile, send, on_state)
     if kind == "listen_only":
         return ListenOnlyDriver(profile, send, on_state)
+    if kind == "simplewifi_tcp":
+        return SimpleWifiDriver(profile, send, on_state)
     return Pc1002BusDriver(profile, send, write_path, on_state)

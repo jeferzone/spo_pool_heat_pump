@@ -205,6 +205,7 @@ def test_all_profiles_validate() -> None:
         "fairland_pc1004_cn13",
         "fairland_ips_pro_coils",
         "unknown_dump_only",
+        "astral_top12_simplewifi",
     }
     for path in sorted(PROFILES.glob("*.json")):
         if path.name == "schema.json" or path.name.startswith("_"):

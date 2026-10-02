@@ -1,0 +1,86 @@
+{
+  "identity": {
+    "id": "astral_top12_simplewifi",
+    "brand": "Astral Pool",
+    "model": "Top +12",
+    "family": "simplewifi",
+    "verification": "community",
+    "source": "packet captures of the app + live polling against one unit; see docs/astral/CONTEXTO.md (not published with this repo)",
+    "connector": "built-in Simple-WiFi module, TCP 60000"
+  },
+  "link": {
+    "transport": "tcp_simplewifi",
+    "default_port": 60000
+  },
+  "driver": {
+    "type": "simplewifi_tcp"
+  },
+  "modes": ["heat"],
+  "enums": {},
+  "registers": {
+    "power": { "frame": "80/1", "byte": 0, "type": "bool", "write": true },
+    "setpoint": {
+      "frame": "80/1",
+      "byte": 4,
+      "type": "u8",
+      "transform": "astral_temp",
+      "write": true,
+      "confidence": "confirmed"
+    },
+    "t_inlet": {
+      "frame": "D0/1",
+      "byte": 1,
+      "type": "u8",
+      "transform": "astral_temp",
+      "confidence": "probable"
+    },
+    "t_outlet": {
+      "frame": "D0/1",
+      "byte": 2,
+      "type": "u8",
+      "transform": "astral_temp",
+      "confidence": "probable"
+    },
+    "t_ambient": {
+      "frame": "D0/1",
+      "byte": 3,
+      "type": "u8",
+      "transform": "astral_temp",
+      "confidence": "confirmed"
+    },
+    "outputs": {
+      "frame": "D0/1",
+      "byte": 6,
+      "type": "bits",
+      "bits": { "compressor": 0, "fan": 3, "outputs_5_6": 4 },
+      "bit_confidence": { "compressor": "confirmed", "fan": "confirmed", "outputs_5_6": "probable" }
+    },
+    "faults": {
+      "frame": "D0/1",
+      "bytes": [10, 11, 12, 13],
+      "type": "ascii"
+    },
+    "fan_alt": {
+      "frame": "D0/0",
+      "group": "4F",
+      "byte": 7,
+      "type": "bool",
+      "confidence": "confirmed"
+    },
+    "alarm": {
+      "frame": "D0/0",
+      "group": "53",
+      "byte": 5,
+      "type": "bool",
+      "confidence": "probable"
+    }
+  },
+  "fixtures": {
+    "frames": {
+      "read_80_1": "AA 5A B1 80 01 02 00 00 00 00 01 01 01 0C 74 7D 74 8C 54 8C 54 8C 54 3E 3E 00 00 00 00 00 00 00 00 A5 7D 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+      "read_d0_1": "AA 5A B1 D0 01 02 00 00 00 00 01 00 70 72 66 00 02 09 00 00 00 20 20 20 20 00 00 00 00 00 0A 1E 00 F2 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+      "write_power_on_setpoint_32_5": "AA 5A B1 83 01 02 00 00 00 00 01 01 01 0C 74 7D 74 8C 54 8C 54 8C 54 3E 3E 00 00 00 00 00 00 00 00 A6 8D"
+    }
+  },
+  "notes": "Heat-only pump: no mode byte exists on this wire, so `modes` is just [\"heat\"] and the climate entity keeps Home Assistant's own 8-40C bounds/0.5 step (no per-pump min/max register to read). `outputs.compressor` (D0/1 byte 6 bit 0) and `outputs.fan` (bit 3) are confirmed by measuring power at the pump's own outlet while it was on the network: ~7W idle, ~120W with only the fan bit set, ~1826W with the compressor bit set, and the fan bit coming on first with the compressor following ~64s later across two observed cycles. `fan_alt` (D0/0 group 0x4F byte 7, a second, independent source for the same physical fan) is also confirmed: it agreed with outputs.fan on every observed state (fan on and off) with zero mismatches. The Fan running diagnostic entity still reads outputs.fan as the primary value and surfaces fan_alt as an attribute (`mismatch_with_primary`) only if a future reading ever disagrees — now a disagreement alert, not an expected occurrence. `outputs.outputs_5_6` (bit 4) and `alarm` (D0/0 group 0x53 byte 5) remain probable, not confirmed by this round of testing. D0/0 group 0x4F bytes 5-6 (besides byte 7) and the exact inlet-vs-outlet byte assignment (D0/1 bytes 1/2) remain unconfirmed and intentionally unmapped. The entity/device is reported unavailable only until page 80/1 and page D0/1 have both been seen at least once; compressor, fan, fan_alt, and alarm (all tied to D0/1 byte 6 or the D0/0 groups) simply read as unknown until their own source frame arrives, without that holding back the rest of the device — no field ever shows a guessed off/false/idle before its real source frame arrives. Pages 80/6 and 80/7 (plaintext Wi-Fi password) are never read by the driver, not just unmapped here. All MAC/CRC bytes in fixtures.frames are fabricated, not from a real capture."
+}
